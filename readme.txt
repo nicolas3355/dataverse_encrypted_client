@@ -1,3 +1,3 @@
-DATAVERSE HARVARD is now being used at dataverse.harvard.edu
-token ca935fc9-7615-4c43-83db-f3942ba36e1d
-python2
+the demo site of DATAVERSE HARVARD is now being used at demo.dataverse.org
+token ae1379dd-29b3-40b7-b583-c4e40cc3656e
+I am using python2
