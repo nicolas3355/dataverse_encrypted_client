@@ -11,7 +11,7 @@ def enc_file(filepath):
     with open(filepath, 'r') as myfile:
         data = myfile.read()
         ciphertext = siv.seal(data, [nonce])
-        return (key, nonce + ciphertext)
+        return (key, nonce, nonce + ciphertext)
     return None
 
 
@@ -25,3 +25,17 @@ def dec_file(filepath, data_key):
         return plaintext
     return None
 
+
+def wrap_key_org(public_key_org, data_key):
+    # wrap data key under public key?
+    # miscreant is for symmetric encryption
+    pass
+
+
+def wrap_key_owner(passphrase, data_key):
+    # salt = ejre
+    # owner_key = hmac(passphrase, salt)
+    # ciphertext = encrypt(data_key, owner_key)
+    # ciphertext = salt + ciphertext
+    ciphertext = "123"
+    return ciphertext
