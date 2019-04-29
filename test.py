@@ -65,11 +65,11 @@ else:
 dataset.upload_file("encryped_test_file.txt", nonce + ciphertext, False)
 
 
-def update_metadata(dataset, metadata):
-    """Updates dataset draft with provided metadata.
-    Will create a draft version if none exists.
-    :param dict metadata: json retrieved from `get_version_metadata`
-    """
+# def update_metadata(dataset, metadata):
+#    """Updates dataset draft with provided metadata.
+#    Will create a draft version if none exists.
+#    :param dict metadata: json retrieved from `get_version_metadata`
+#    """
 #   url = '{0}/datasets/{1}/versions/:draft'.format(
 #   dataset.connection.native_base_url,
 #   dataset.id,
@@ -96,23 +96,23 @@ def update_metadata(dataset, metadata):
 # metadata file contains the information necessary to decrypt the data
 
 
-metadata = dataset.get_metadata()
-update_metadata(dataset)
+# metadata = dataset.get_metadata()
+# update_metadata(dataset)
 
 metadata_filename = "metadata.txt"
 
 
 def get_file_content(url, connection):
     request = requests.get(url, params={"key": connection.token})
-    if request.status_code == "200":
+    if request.status_code == 200:
         return request.content
 
 
-def get_metadata(dataset):
+def get_metadata(dataset, connection):
     # find the filename with the metadata
     metadata_file = dataset.get_file(metadata_filename)
     if metadata_file is not None:
-        return get_file_content(metadata_file.download_url)
+        return get_file_content(metadata_file.download_url, connection)
     return None
 
 
@@ -125,17 +125,28 @@ def update_metadata(dataset, new_metadata_content):
     dataset.upload_file(metadata_filename, new_metadata_content, False)
 
 
-#   def update_metdata(dataset, filename, data_key, org_map, owner_passphrase):
-#       metadata = dataset.get_metadata()
-#       print(metadata)
-#       return
-#       files = metadata['files']
-#       for i in range(0, len(files)):
-#           if files[i]['dataFile']['filename'] == filename:
-#               files[i]['dataFile']['owner'] = wrap_key_owner(
-#                      "owner_passphrase", "data_key")
-#               files[i]['dataFile']['orgs'] = []
-#       dataset.update_metadata(metadata)
+def update_metadata_of_file(dataset, filename, data_key, org_map,
+                            owner_passphrase, owner_id):
+    metadata = get_metadata(dataset, connection)
+    owner_wrapped_key = wrap_key_owner(owner_passphrase, data_key)
+
+    # {files: {file1:{owner-id:{}, owner-wrapped-key:{},
+    #   orgs:{org-id:"org-wrapped-key",}}, ...}}
+
+    obj = {"owner_id": owner_id, "owner_wrapped_key":
+           owner_wrapped_key, "org": {}}
+
+    # wrapp the data_key for each one of the orgs
+    if(metadata is None):
+        print ("Creating new metadata, metadata is empty")
+        metadata = {"files": {filename: obj}}
+        metadata = json.dumps(metadata)
+    else:
+        metadata = json.loads(metadata)
+        metadata["files"][filename] = obj
+        metadata = json.dumps(metadata)
+    update_metadata(dataset, metadata)
 
 
-update_metadata(dataset, "encrypted_test_file.txt", None, None, None)
+update_metadata_of_file(dataset, "encrypted_test_file.txt", "data-key", None,
+                        "owner-passphrase", "id")
