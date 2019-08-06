@@ -2,14 +2,9 @@
 from miscreant.aes.siv import SIV
 import os
 import argon2
-from argon2 import PasswordHasher
 import hashlib
 import nacl.utils
 from nacl.public import PrivateKey, SealedBox
-
-# added in encode() and decode() in enc_file() and dec_file(),
-# respectively because of errors thrown (SIV.seal needs to take
-# in bytes, not string)
 
 def enc_file(filepath):
     key = SIV.generate_key()
@@ -35,8 +30,6 @@ def dec_file(filepath, data_key):
 
 
 def wrap_key_org(public_key_org, data_key):
-    # wrap data key under public key?
-    # miscreant is for symmetric encryption
     sealed_box = SealedBox(public_key_org)
     msg = data_key
     ciphertext = sealed_box.encrypt(msg)
