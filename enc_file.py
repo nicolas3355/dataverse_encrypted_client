@@ -2,7 +2,9 @@
 from miscreant.aes.siv import SIV
 import os
 import argon2
-import hashlib
+import base64
+#import hashlib
+import json
 import nacl.utils
 from nacl.public import PrivateKey, SealedBox
 
@@ -15,6 +17,7 @@ def enc_file(filepath):
         data = myfile.read().encode()
         ciphertext = siv.seal(data, [nonce])
         return (key, nonce, nonce + ciphertext)
+        #returning ciphertext with the nonce (first 16 bytes)
     return None
 
 
@@ -43,7 +46,10 @@ def unwrap_key_org(secret_key, ciphertext):
 	return plaintext
 
 def wrap_key_owner(passphrase, data_key):
-    """ Using argon2.low_level function, which is technically a hazmat
+    """
+    data_key must be encoded
+
+    Using argon2.low_level function, which is technically a hazmat
     function, but it doesn't appear to have any dangerous problems. We
     can't use the argon2.PasswordHasher() functions because they compress
     the hash and metadata using Blake2b and you can't extract the raw
@@ -64,14 +70,6 @@ def wrap_key_owner(passphrase, data_key):
 
 
 def unwrap_key_owner(passphrase, wrapped_key_ciphertext):
-	"""
-    iterations = 10000
-    dklen = 32
-    salt = wrapped_key_ciphertext[:16]
-
-    derived_key = hashlib.pbkdf2_hmac("sha512", passphrase, salt, iterations,
-                                      dklen)
-	"""
 	#derive key using passphrase and salt
 	salt = wrapped_key_ciphertext[:16]
 	derived_key = argon2.low_level.hash_secret_raw(passphrase.encode(), salt, time_cost=1, memory_cost=8, parallelism=1, hash_len=32,type=argon2.low_level.Type.I)
@@ -82,4 +80,20 @@ def unwrap_key_owner(passphrase, wrapped_key_ciphertext):
 	return data_key
 
 
+def decrypt_file_owner(passphrase, metadata_file, encrypted_file):
+    # need to have pulled the metadata.txt file and the
+    # encrypted_test_file.txt file
+    # get owner key from metadata and use to decrypt the file
+    file = open(metadata_file,'r')
+    metadata = json.load(file)
+    file.close()
+    owner_key = metadata['files']['encrypted_test_file.txt']['owner_wrapped_key']
 
+
+    k = base64.decodestring(owner_key.encode())
+    key = unwrap_key_owner(passphrase, k)
+    end = dec_file(encrypted_file,key)
+    return end
+
+
+print(decrypt_file_owner("owner-passphrase", "metadata.txt", "encrypted_test_file.txt"))
