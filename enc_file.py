@@ -3,7 +3,6 @@ from miscreant.aes.siv import SIV
 import os
 import argon2
 import base64
-#import hashlib
 import json
 import nacl.utils
 from nacl.public import PrivateKey, SealedBox
@@ -32,6 +31,13 @@ def dec_file(filepath, data_key):
     return None
 
 
+def dec_str(ciphertext, data_key):
+    siv = SIV(data_key)
+    nonce = ciphertext[:16]
+    plaintext = siv.open(ciphertext[16:], [nonce])
+    return plaintext.decode()
+
+
 def wrap_key_org(public_key_org, data_key):
     sealed_box = SealedBox(public_key_org)
     msg = data_key
@@ -58,7 +64,9 @@ def wrap_key_owner(passphrase, data_key):
 
     #derive key using passphrase and salt
     salt = os.urandom(16)
-    derived_key = argon2.low_level.hash_secret_raw(passphrase.encode(), salt, time_cost=1, memory_cost=8, parallelism=1, hash_len=32,type=argon2.low_level.Type.I)
+    derived_key = argon2.low_level.hash_secret_raw(passphrase.encode(), 
+        salt, time_cost=1, memory_cost=8, parallelism=1, hash_len=32,
+        type=argon2.low_level.Type.I)
 
     # wrap the data key using the derived key
     siv = SIV(derived_key)
@@ -72,7 +80,9 @@ def wrap_key_owner(passphrase, data_key):
 def unwrap_key_owner(passphrase, wrapped_key_ciphertext):
 	#derive key using passphrase and salt
 	salt = wrapped_key_ciphertext[:16]
-	derived_key = argon2.low_level.hash_secret_raw(passphrase.encode(), salt, time_cost=1, memory_cost=8, parallelism=1, hash_len=32,type=argon2.low_level.Type.I)
+	derived_key = argon2.low_level.hash_secret_raw(passphrase.encode(), 
+        salt, time_cost=1, memory_cost=8, parallelism=1, hash_len=32,
+        type=argon2.low_level.Type.I)
 
 	# unwrap the data key using the derived key
 	siv = SIV(derived_key)
@@ -80,10 +90,11 @@ def unwrap_key_owner(passphrase, wrapped_key_ciphertext):
 	return data_key
 
 
-def decrypt_file_owner(passphrase, metadata_file, encrypted_file):
+def dec_file_owner(passphrase, metadata_file, encrypted_file):
     # need to have pulled the metadata.txt file and the
     # encrypted_test_file.txt file
     # get owner key from metadata and use to decrypt the file
+    # this is if you want to first download and then read file
     file = open(metadata_file,'r')
     metadata = json.load(file)
     file.close()
@@ -96,4 +107,10 @@ def decrypt_file_owner(passphrase, metadata_file, encrypted_file):
     return end
 
 
-print(decrypt_file_owner("owner-passphrase", "metadata.txt", "encrypted_test_file.txt"))
+
+
+
+
+
+
+
