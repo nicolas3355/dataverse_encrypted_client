@@ -3,8 +3,9 @@ from enc_file import *
 import requests
 import json
 import base64
-from nacl.public import PrivateKey, SealedBox
+from nacl.public import PrivateKey, SealedBox, PublicKey
 import argparse
+from ast import literal_eval
 
 
 def get_file_content(url, connection):
@@ -49,7 +50,6 @@ def update_metadata_of_file(dataset, filename, data_key, org_map,
 		   decoded_key, "org": {}}
 
 	# wrap the data_key for each one of the orgs
-	print(type(org_map))
 	if org_map != "None":
 		for org_name in org_map:
 			# adds each organization + public key to metadata
@@ -73,17 +73,13 @@ def update_metadata_of_file(dataset, filename, data_key, org_map,
 def add_user(args):
 	# for adding a new user into the metadata -- need to first derive data_key
 	filename = args.filename
-	org_name = args.org_name
 	passphrase = args.passphrase
-	#public_key = args.public_key
-	#public_key = b'0\xad\xf3\xcf\xdfV\x85\xdaF\x99\xa0\x85/p\x19,]\x84\xbf\xa0\x9f\x90\xe4\xcb\x0fq\xe0s\xfa\xee\rV'
-	#with open(public_keys) as file:
-	#	pub_keys = json.load(file)
-	#	public_key = pub_keys[org_name]
+	org_name = args.org_name
+	pk = args.public_key
 
-	#print(type(public_key))
-	#public_key = public_keys[org_name]
-	#metadata = get_metadata(dataset, connection)
+
+	public_key = PublicKey(pk.encode(), encoder = nacl.encoding.HexEncoder)
+
 	metadata = json.loads(get_metadata(dataset, connection).decode())
 
 	owner_key = metadata['files'][filename]['owner_wrapped_key']
@@ -97,6 +93,7 @@ def add_user(args):
 	metadata["files"][filename]["org"][org_name] = decoded_key
 	metadata = json.dumps(metadata)
 	update_metadata(dataset, metadata)
+	print("Added user permissions for",org_name,"to",filename)
 	return
 
 
@@ -113,7 +110,7 @@ def remove_user(args):
 		return
 	metadata = json.dumps(metadata)
 	update_metadata(dataset, metadata)
-	print('User access revoked.')
+	print('User access revoked for',org_name,'on file', filename)
 	return
 
 
@@ -131,7 +128,6 @@ def upload_file(args):
 	dataset.upload_file(filename, ciphertext, False)
 
 	# add keys to file's metadata
-	print(type(keymap))
 	update_metadata_of_file(dataset, filename, key, keymap,
 						passphrase, "id")
 	print("File uploaded.")
@@ -150,8 +146,13 @@ def download_file(args):
 	k = base64.decodestring(owner_key.encode())
 	key = unwrap_key_owner(passphrase, k)
 	decrypted_file = dec_str(encrypted_file,key)
-	print(decrypted_file)
-	return decrypted_file
+	
+	#save as new file
+	file = open(filename, 'w')
+	file.write(decrypted_file)
+	file.close()
+	print("File saved as", filename)
+	return 
 
 
 def update_password(args):
@@ -173,6 +174,44 @@ def update_password(args):
 	return
 
 
+def download_file_org(args):
+	filename = args.filename
+	org_name = args.org_name
+	sk = args.private_key
+
+	private_key = PrivateKey(sk.encode(), encoder = nacl.encoding.HexEncoder)
+
+	encrypted_file = get_enc_file(dataset,connection,filename)
+	metadata = json.loads(get_metadata(dataset, connection).decode())
+	org_key = metadata['files'][filename]['org'][org_name]
+
+	k = base64.decodestring(org_key.encode())
+	key = unwrap_key_org(private_key, k)
+	decrypted_file = dec_str(encrypted_file,key)
+
+	file = open(filename, 'w')
+	file.write(decrypted_file)
+	file.close()
+	print("File saved as", filename)
+	return
+
+
+def remove_user_from_all(args):
+	# Removes a user's pk from all files
+	org_name = args.org_name
+	metadata = json.loads(get_metadata(dataset, connection).decode())
+	for file in list(metadata['files']):
+		for org in list(metadata['files'][file]['org']):
+			if org == org_name:
+				del metadata["files"][file]["org"][org_name]
+	metadata = json.dumps(metadata)
+	update_metadata(dataset, metadata)
+	print('User access revoked for',org_name)
+	return			
+
+
+
+
 
 host = 'demo.dataverse.org'
 token = 'ae1379dd-29b3-40b7-b583-c4e40cc3656e'
@@ -187,12 +226,6 @@ dataset = dataverse.get_dataset_by_doi('doi:10.70122/FK2/O13BQC')
 
 metadata_filename = "metadata.txt"
 
-
-FUNCTION_MAP = {'upload' : upload_file,
-				#'add_user' : give_access,
-				#'remove_user' : revoke_access,
-				#'change_password' : update_pass,
-				'download' : download_file }
 
 parser = argparse.ArgumentParser(description='To work with encrypted files in dataverse')
 
@@ -215,9 +248,10 @@ download.set_defaults(func=download_file)
 
 add = subparsers.add_parser('add_user', help='Add a new authorized user')
 add.add_argument('filename', type=str, help='Filename in dataverse')
-add.add_argument('org_name', type=str, help='Organization name')
 add.add_argument('passphrase', type=str, help='Your passphrase')
-#add.add_argument('public_key', type=bytes, help='File with orgs and PKs')
+add.add_argument('org_name', type=str, help='Organization name')
+add.add_argument('public_key', type=str, help='Organizations PublicKey, '
+				 'hex-encoded')
 add.set_defaults(func=add_user)
 
 remove = subparsers.add_parser('remove_user', help='Revoke access for a user')
@@ -226,13 +260,23 @@ remove.add_argument('org_name', type=str, help='Org name as saved in metadata')
 remove.set_defaults(func=remove_user)
 
 change = subparsers.add_parser('update_pass', help='Change your passphrase')
+change.add_argument('filename', type=str, help='Filename in dataverse')
 change.add_argument('old_passphrase', type=str, help='Your old passphrase')
 change.add_argument('new_passphrase', type=str, help='Your new passphrase')
-change.add_argument('filename', type=str, help='Filename in dataverse')
 change.set_defaults(func=update_password)
 
-args = parser.parse_args()
+download_org = subparsers.add_parser('download_org', help='Download and decrypt a file for an organization')
+download_org.add_argument('filename', type=str, help='Filename in dataverse')
+download_org.add_argument('org_name', type=str, help='Name of organization')
+download_org.add_argument('private_key', type=str, help='Name of organization')
+download_org.set_defaults(func=download_file_org)
 
+remove_all = subparsers.add_parser('remove_from_all', help='Remove user from ALL metadata')
+remove_all.add_argument('org_name', type=str, help='Org name as saved in metadata')
+remove_all.set_defaults(func=remove_user_from_all)
+
+
+args = parser.parse_args()
 args.func(args)
 
 

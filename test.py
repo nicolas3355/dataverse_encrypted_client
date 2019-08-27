@@ -144,17 +144,15 @@ def update_metadata_of_file(dataset, filename, data_key, org_map,
     obj = {"owner_id": owner_id, "owner_wrapped_key":
            decoded_key, "org": {}}
 
+    # wrap the data_key for each one of the orgs
     if org_map is not None:
         for org_name in org_map:
-            # adds each organization + public key
+            # adds each organization + public key to metadata
             public_key_org = org_map[org_name]
-            print(org_name)
-            print(public_key_org)
             org_wrapped_key = wrap_key_org(public_key_org, data_key)
             decoded_key = base64.encodestring(org_wrapped_key).decode('ascii')
             obj["org"][org_name] = decoded_key
 
-    # wrap the data_key for each one of the orgs
     if(metadata is None):
         print ("Creating new metadata, metadata is empty")
         metadata = {"files": {filename: obj}}
@@ -195,19 +193,13 @@ def test_owner(passphrase, keymap):
         key, nonce, ciphertext = out
     dataset.upload_file("encrypted_test_file.txt", ciphertext, False)
 
-    # add owner's passcode to file's metadata file
-
+    # add keys to file's metadata
     update_metadata_of_file(dataset, "encrypted_test_file.txt", key, keymap,
                         passphrase, "id")
 
-    # download encrypted file and metadata
+    # download encrypted file and get key from metadata
     encrypted_file = get_enc_file(dataset,connection,"encrypted_test_file.txt")
-
-    print("Retrieving metadata")
     metadata = json.loads(get_metadata(dataset, connection).decode())
-    print("Done")
-
-    # get key from metadata
     owner_key = metadata['files']['encrypted_test_file.txt']['owner_wrapped_key']
 
     # decrypt file
@@ -218,15 +210,17 @@ def test_owner(passphrase, keymap):
 
 # test organization keys
 sk0 = PrivateKey.generate()
+print(type(sk0))
 pk0 = sk0.public_key
+print(type(pk0))
 sk1 = PrivateKey.generate()
 pk1 = sk1.public_key
 
 keymap = {"org0": pk0, "org1": pk1}
 
-decrypted, key = test_owner("password", keymap)
+#decrypted, key = test_owner("password", keymap)
 
-print(decrypted)
+#print(decrypted)
 
 #update_metadata_org(dataset, "encrypted_test_file.txt", key, "test_org", skbob)
 
@@ -235,6 +229,7 @@ def test_org(private_key, org_name):
     encrypted_file = get_enc_file(dataset,connection,"encrypted_test_file.txt")
 
     # get key from metadata
+    metadata = json.loads(get_metadata(dataset, connection).decode())
     org_key = metadata['files']['encrypted_test_file.txt']['org'][org_name]
 
     # decrypt file

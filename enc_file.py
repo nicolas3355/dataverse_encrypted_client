@@ -51,6 +51,7 @@ def unwrap_key_org(secret_key, ciphertext):
 	plaintext = unseal_box.decrypt(ciphertext)
 	return plaintext
 
+
 def wrap_key_owner(passphrase, data_key):
     """
     data_key must be encoded
